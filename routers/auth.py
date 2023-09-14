@@ -5,7 +5,7 @@ from models import Players
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from passlib.context import CryptContext
@@ -34,6 +34,11 @@ class CreatePlayerRequest(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+
+class UserVerification(BaseModel):
+    password: str
+    new_password: str = Field(min_length=6)
 
 
 SECRET_KEY = 'DNDcharacters'
@@ -93,6 +98,7 @@ async def create_player(db: db_dependency, create_player_request: CreatePlayerRe
     db.add(create_player_model)
     db.commit()
 
+
 # Token endpoint for logging in.
 @router.post("/token", response_model=Token)
 async def login_for_access_token(db: db_dependency, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
@@ -103,3 +109,19 @@ async def login_for_access_token(db: db_dependency, form_data: Annotated[OAuth2P
     token = create_access_token(user.username, user.id, user.role, timedelta(minutes=20))
 
     return {'access_token': token, 'token_type': 'bearer'}
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(db: db_dependency, user: user_dependency, user_verification: UserVerification):
+    if user is None:
+        raise HTTPException(status_code=201, detail='Auth Failed')
+
+    user_model = db.query(Players).filter(Players.id == user.get('id')).first()
+
+    if not bcrypt_context.verify(user_verification.password, user_model.hashed_password):
+        raise HTTPException(status_code=401, detail='error on password change.')
+
+    user_model.hashed_password = bcrypt_context.hash(user_verification.new_password)
+
+    db.add(user_model)
+    db.commit()
