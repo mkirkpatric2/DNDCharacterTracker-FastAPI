@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 from starlette import status
 from database import SessionLocal
 from models import Characters
+from routers.auth import get_current_user
 
 router = APIRouter(
-    prefix='/characters',  # everything here is under /auth
+    prefix='/characters',  # everything here is under /characters
     tags=['characters']
 )
 
@@ -20,6 +21,7 @@ def get_db():
         db.close()
 
 
+user_dependency = Annotated[dict, Depends(get_current_user)]
 db_dependency = Annotated[Session, Depends(get_db)]
 
 
@@ -38,34 +40,50 @@ class CharacterRequest(BaseModel):
     alive: bool
 
 
+# Read all characters. Available to everyone.
 @router.get("/", status_code=status.HTTP_200_OK)
 async def print_chars(db: db_dependency):
     return db.query(Characters).all()
 
 
+# Create a character. Must be logged in. Owner ID of the character is tied to creator's ID
 @router.post("/new-character", status_code=status.HTTP_201_CREATED)
-async def create_char(db: db_dependency, new_char: CharacterRequest):
-    character_model = Characters(**new_char.model_dump())
+async def create_char(db: db_dependency, new_char: CharacterRequest, user: user_dependency):
+    if user is None:
+        raise HTTPException(status_code=401, detail='Not Authorized')
+
+    character_model = Characters(**new_char.model_dump(), owner_id=user.get('id'))
 
     db.add(character_model)
     db.commit()
 
 
-@router.get("/{char_id}", status_code=status.HTTP_200_OK)
-async def get_char_by_id(db: db_dependency, char_id: int = Path(gt=0, lt=100)):
-    char_model = db.query(Characters).filter(Characters.id == char_id).first()
+# Allows registered users to search for specific characters by character name.
+@router.get("/{char_name}", status_code=status.HTTP_200_OK)
+async def get_char_by_name(db: db_dependency, user: user_dependency,
+                           char_name: str = Path(min_length=3, max_length=20)):
+    if user is None:
+        raise HTTPException(status_code=401, detail="not authorized")
+
+    char_model = db.query(Characters).filter(Characters.name == char_name).first()
     if char_model is not None:
         return char_model
-    raise HTTPException(status_code=404, detail='Char ID not found')
+    raise HTTPException(status_code=404, detail='Char Name not found')
 
 
-@router.post("/update/{char_id}", status_code=status.HTTP_204_NO_CONTENT)
+# Allow users to update only their characters.
+@router.post("/update/{char_id}", status_code=status.HTTP_204_NO_CONTENT)  # update
 async def update_char(db: db_dependency,
                       char_request: CharacterRequest,
+                      user: user_dependency,
                       char_id: int = Path(gt=0, lt=25)):
     char_model = db.query(Characters).filter(Characters.id == char_id).first()
-    if char_model is None:
-        raise HTTPException(status_code=404, details='not found')
+
+    if user.get('id') != char_model.owner_id:
+        raise HTTPException(status_code=401, detail="Can't update someone else's character bud. Not Authorized.")
+
+    elif char_model is None:
+        raise HTTPException(status_code=404, detail='not found')
 
     char_model.name = char_request.name
     char_model.character_class = char_request.character_class
@@ -79,7 +97,9 @@ async def update_char(db: db_dependency,
     char_model.wisdom = char_request.wisdom
     char_model.charisma = char_request.charisma
     char_model.alive = char_request.alive
+    char_model.owner_id = user.get('id')
 
     db.add(char_model)
     db.commit()
+
 

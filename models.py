@@ -6,7 +6,7 @@ class Characters(Base):
     __tablename__ = 'characters'
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, ForeignKey('players.username'), unique=True)
+    name = Column(String, unique=True)
     character_class = Column(String)
     level = Column(Integer)
     race = Column(String)
@@ -18,6 +18,7 @@ class Characters(Base):
     wisdom = Column(Integer)
     charisma = Column(Integer)
     alive = Column(Boolean)
+    owner_id = Column(Integer, ForeignKey('players.id'))
 
 
 class Players(Base):
