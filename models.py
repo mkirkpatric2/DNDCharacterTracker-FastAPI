@@ -19,6 +19,7 @@ class Characters(Base):
     charisma = Column(Integer)
     alive = Column(Boolean)
     owner_id = Column(Integer, ForeignKey('players.id'))
+    game_id = Column(Integer, ForeignKey('games.id'))
 
 
 class Players(Base):
@@ -28,3 +29,11 @@ class Players(Base):
     username = Column(String, unique=True)
     hashed_password = Column(String)
     role = Column(String)
+
+
+class Games(Base):
+    __tablename__ = 'games'
+
+    id = Column(Integer, primary_key=True, index=True)
+    world = Column(String)
+    dm_id = Column(Integer, ForeignKey('players.id'))
