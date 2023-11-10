@@ -3,6 +3,7 @@ from routers import auth, characters, admin  # import router files
 from database import engine
 import models
 
+
 app = FastAPI()
 
 app.include_router(auth.router) #connect the two files in 'project/routers'

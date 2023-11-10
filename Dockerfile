@@ -1,7 +1,7 @@
 FROM python:latest
 WORKDIR /app
 COPY . /app
-RUN pip install fastapi sqlalchemy pydantic starlette jose passlib
+RUN pip install fastapi sqlalchemy pydantic starlette jose passlib python-decouple
 
 EXPOSE 8000
 
